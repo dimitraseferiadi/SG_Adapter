@@ -16,6 +16,7 @@ import inspect
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import torch
+import torch.nn as nn
 from packaging import version
 from transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
 
@@ -653,9 +654,13 @@ class StableDiffusionTextSGPipeline(DiffusionPipeline):
                 # text_updater.to(prompt_embeds.dtype)
                 n = prompt_embeds.shape[0]
                 prompt_cond = prompt_embeds[n//2:,:,:]
-                print(prompt_cond.shape)
-                print(sg_embed.shape)
+
                 prompt_cond = adapter(prompt_cond, sg_embed, cross_attention_mask=sg_attention_mask, self_attention_mask=self_attention_mask)
+                
+                cond_projection = nn.Linear(1024, 768)
+                cond_projection.to("cuda")
+                prompt_cond = cond_projection(prompt_cond)
+                
                 prompt_embeds[n//2:,:,:] = prompt_cond
             else:
                 # text_updater.to(prompt_embeds.dtype)

@@ -64,7 +64,7 @@ class RelationAttention(ModelMixin, ConfigMixin):
         self.proj_in = nn.Linear(768, query_dim)
 
         self.linear = nn.Sequential(
-            nn.Linear(sg_emb_dim, query_dim),
+            nn.Linear(2312, query_dim),
             nn.SiLU(),
             nn.Linear(query_dim, query_dim),
             nn.SiLU(),
@@ -73,7 +73,7 @@ class RelationAttention(ModelMixin, ConfigMixin):
         
         self.attn = Attention(query_dim=query_dim, heads=n_heads, dim_head=d_head)
         self.ff = FeedForward(query_dim, activation_fn="geglu")
-        print("Query Dim text_up", query_dim)
+
         self.norm1 = nn.LayerNorm(query_dim)
         self.norm2 = nn.LayerNorm(query_dim)
 
@@ -85,14 +85,10 @@ class RelationAttention(ModelMixin, ConfigMixin):
             self.register_parameter('alpha_pool', nn.Parameter(torch.tensor(-5.0)))
 
     def forward(self, x, sg_embed, cross_attention_mask=None, self_attention_mask=None):
-        print("sg embed shape", sg_embed.shape)
-        
         x = self.proj_in(x)
 
         sg_embed = self.linear(sg_embed)
         
-        print("Meta to sg_proj tou sg embed", sg_embed.shape)
-        print("Meta to sg_proj tou x", x.shape)
         # explicitly divide local token and global token
         x = x + self.alpha_attn.tanh() * self.attn(self.norm1(x), encoder_hidden_states=self.norm1(sg_embed), attention_mask=cross_attention_mask)
         x = x + self.alpha_dense.tanh() * self.ff(self.norm2(x))
