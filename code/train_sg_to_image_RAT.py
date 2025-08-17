@@ -715,14 +715,16 @@ def main():
     if args.use_self_attn_mask:
         adapter = RelationAttentionWithSelfAttention(
             sg_emb_dim=3080,
-            query_dim=1024,
+            #query_dim=1024,
+            query_dim = text_encoder.config.hidden_size,
             n_heads=8,
             d_head=128,
         )
     else:
         adapter = RelationAttention(
             sg_emb_dim=3080,
-            query_dim=1024,
+            #query_dim=1024,
+            query_dim = text_encoder.config.hidden_size,
             n_heads=8,
             d_head=128,
             pooling=args.use_pooling
