@@ -615,6 +615,8 @@ def parse_args():
 
     return args
 
+
+
 def main():
     args = parse_args()
 
@@ -1041,6 +1043,8 @@ def main():
     progress_bar = tqdm(range(global_step, args.max_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Steps")
 
+    sg_proj_layer = torch.nn.Linear(1024, 768)
+
     for epoch in range(first_epoch, args.num_train_epochs):
         adapter.train()
         train_loss = 0.0
@@ -1083,13 +1087,18 @@ def main():
                     attention_mask=batch["clip_attention_masks"] if args.use_clip_attn_mask else None
                 )[0]
                 print("prompt embed aka x", prompt_embed.shape)
-                print('batch[scenegraph_embeddings] aka sg_embed', batch["scenegraph_embeddings"])
+                print('batch[scenegraph_embeddings] aka sg_embed', batch["scenegraph_embeddings"].shape)
+
+                sg_proj_layer.to(prompt_embed.device)
+                sg_proj_layer.to(dtype=weight_dtype)
                 updated_prompt_embed = adapter(
                     prompt_embed, 
                     batch["scenegraph_embeddings"], 
                     cross_attention_mask=batch["sg_attention_masks"] if args.use_sg_attn_mask else None,
                     self_attention_mask=batch["self_attention_masks"] if args.use_self_attn_mask else None
                 ).to(dtype=weight_dtype)
+
+                updated_prompt_embed = sg_proj_layer(updated_prompt_embed)
 
                 cross_attention_kwargs = {}
 
