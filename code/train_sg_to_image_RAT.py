@@ -1046,9 +1046,11 @@ def main():
     sg_proj_layer = torch.nn.Linear(1024, 768)
 
     for epoch in range(first_epoch, args.num_train_epochs):
+        print(f"Epoch: {epoch}")
         adapter.train()
         train_loss = 0.0
         for step, batch in enumerate(train_dataloader):
+            print(f"Step: {step}")
             if args.validation_file is not None and global_step % args.validation_steps == 0:
                 if accelerator.is_main_process:
                     if args.use_ema:
@@ -1086,8 +1088,8 @@ def main():
                     batch["input_ids"], 
                     attention_mask=batch["clip_attention_masks"] if args.use_clip_attn_mask else None
                 )[0]
-                print("prompt embed aka x", prompt_embed.shape)
-                print('batch[scenegraph_embeddings] aka sg_embed', batch["scenegraph_embeddings"].shape)
+                #print("prompt embed aka x", prompt_embed.shape)
+                #print('batch[scenegraph_embeddings] aka sg_embed', batch["scenegraph_embeddings"].shape)
 
                 sg_proj_layer.to(prompt_embed.device)
                 sg_proj_layer.to(dtype=weight_dtype)
