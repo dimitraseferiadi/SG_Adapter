@@ -4,6 +4,7 @@ from diffusers.models import ModelMixin
 from diffusers.configuration_utils import ConfigMixin, register_to_config
 from diffusers.models.attention import FeedForward
 from diffusers.models.attention_processor import Attention
+import token_to_graph as _ttg_module  
 
 
 class RelationAttentionWithSelfAttention(ModelMixin, ConfigMixin):

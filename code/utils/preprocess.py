@@ -8,6 +8,7 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 import random
+import token_to_graph as _ttg_module  
 
 def visualize_attention(attention_map, end_token_idx, end_relation_idx):
     """
@@ -401,4 +402,89 @@ def preprocess_scenegraph(examples, text_encoder, tokenizer, args):
             clip_attention_mask = generate_clip_attention_mask(mapping, batch_size=1, text_length=77, dtype=dtype).squeeze(0).to(device)
             clip_attention_mask_list.append(clip_attention_mask)
         examples['clip_attention_mask'] = clip_attention_mask_list
+
+
+def extract_sg_embed_neural(objects, relations, text_encoder, tokenizer,
+                            caption=None, max_relation_per_image=10, device=None):
+    """Produce scene-graph relation embeddings from CLIP token embeddings using a learned Token->Graph module.
+    Returns tensor of shape (1, max_relation_per_image, sg_dim) matching original extract_sg_embed layout.
+    """
+    if device is None:
+        device = text_encoder.device
+
+    # tokenize caption (fallback: join object names)
+    if caption is None:
+        caption = ' '.join(objects) if objects is not None else ''
+
+    tokenizer_inputs = tokenizer(caption, padding=True, return_tensors='pt').to(device)
+    with torch.no_grad():
+        outputs = text_encoder(**tokenizer_inputs, return_dict=True)
+        if hasattr(outputs, 'last_hidden_state') and outputs.last_hidden_state is not None:
+            token_embeddings = outputs.last_hidden_state  # (1, T, D)
+        elif hasattr(outputs, 'pooler_output') and outputs.pooler_output is not None:
+            T = tokenizer_inputs['input_ids'].shape[1]
+            token_embeddings = outputs.pooler_output.unsqueeze(1).expand(-1, T, -1)
+        else:
+            raise RuntimeError('Unexpected CLIP text encoder outputs; cannot obtain token embeddings')
+
+    B, T, D = token_embeddings.shape
+
+    # Instantiate TokenToGraph (for training: move this to a persistent module)
+    ttg = _ttg_module.TokenToGraph(
+        token_dim=D, hidden_dim=512, num_slots=12, num_edge_types=6, n_transformer_layers=1
+    ).to(device)
+
+    pred = ttg(token_embeddings)
+    node_logits = pred['node_logits']  # (1, K)
+    node_feats = pred['node_feats']    # (1, K, H)
+    edge_logits = pred['edge_logits']  # (1, K, K, E)
+
+    # Pick candidate slots
+    node_probs = torch.sigmoid(node_logits)[0]
+    keep_slots = (node_probs > 0.2).nonzero(as_tuple=False).squeeze(-1).tolist()
+    if isinstance(keep_slots, int):
+        keep_slots = [keep_slots]
+
+    E = edge_logits.shape[-1]
+    H = node_feats.shape[-1]
+    sg_emb_dim = 3080
+
+    # Random embeddings/projection (replace with trainable params in nn.Module)
+    edge_type_emb = torch.randn(E, H, device=device)
+    proj = _nn.Linear(H * 3, sg_emb_dim).to(device)
+
+    relations_out = []
+    for i in keep_slots:
+        for j in keep_slots:
+            if i == j:
+                continue
+            logits = edge_logits[0, i, j]
+            type_idx = int(torch.argmax(logits).item())
+            if type_idx == 0:  # assume 0 = no edge
+                continue
+            sub = node_feats[0, i]
+            obj = node_feats[0, j]
+            edge_emb = edge_type_emb[type_idx]
+            rel_feat = torch.cat([sub, edge_emb, obj], dim=0)
+            rel_proj = proj(rel_feat)
+            relations_out.append(rel_proj.unsqueeze(0))
+            if len(relations_out) >= max_relation_per_image:
+                break
+        if len(relations_out) >= max_relation_per_image:
+            break
+
+    if len(relations_out) == 0:
+        pad = torch.zeros((1, max_relation_per_image, sg_emb_dim), device=device)
+        return pad
+
+    rels = torch.cat(relations_out, dim=0)  # (R, sg_emb_dim)
+    if rels.shape[0] < max_relation_per_image:
+        pad_n = max_relation_per_image - rels.shape[0]
+        padding = torch.zeros((pad_n, sg_emb_dim), device=device)
+        rels = torch.cat([rels, padding], dim=0)
+    else:
+        rels = rels[:max_relation_per_image]
+
+    return rels.unsqueeze(0)
+
 
