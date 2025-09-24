@@ -1,8 +1,17 @@
 import torch
 
 # Load your pipeline (so you have CLIP text_encoder + tokenizer ready)
-from pipeline_stable_diffusion_text_sg import StableDiffusionTextSgPipeline
-pipe = StableDiffusionTextSgPipeline.from_pretrained("openai/clip-vit-base-patch32")  # adjust if you have weights locally
+from pipeline_stable_diffusion_text_sg import StableDiffusionTextSGPipeline
+pipeline = StableDiffusionTextSGPipeline.from_pretrained(
+    args.pretrained_model_name_or_path,
+    vae=accelerator.unwrap_model(vae),
+    text_encoder=accelerator.unwrap_model(text_encoder),
+    tokenizer=tokenizer,
+    unet=accelerator.unwrap_model(unet),
+    safety_checker=None,
+    revision=args.revision,
+    torch_dtype=weight_dtype,
+)
 
 # Import the new extractor
 from utils import preprocess
