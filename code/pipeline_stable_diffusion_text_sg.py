@@ -178,6 +178,8 @@ class StableDiffusionTextSGPipeline(DiffusionPipeline):
 
         clip_dim = text_encoder.config.hidden_size  # typically 768 for CLIP-L/14
         self.token_to_sg = TokenToSceneGraph(token_dim=clip_dim, K=8, heads=4)
+        self.token_to_sg = self.token_to_sg.to(self.device) 
+
 
     def enable_vae_slicing(self):
         r"""
