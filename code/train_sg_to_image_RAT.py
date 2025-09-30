@@ -716,14 +716,14 @@ def main():
 
     if args.use_self_attn_mask:
         adapter = RelationAttentionWithSelfAttention(
-            sg_emb_dim=3080,
+            sg_emb_dim=1024,
             query_dim=1024,
             n_heads=8,
             d_head=128,
         )
     else:
         adapter = RelationAttention(
-            sg_emb_dim=3080,
+            sg_emb_dim=1024,
             query_dim=1024,
             n_heads=8,
             d_head=128,
@@ -1100,7 +1100,7 @@ def main():
                     self_attention_mask=batch["self_attention_masks"] if args.use_self_attn_mask else None
                 ).to(dtype=weight_dtype)
 
-                updated_prompt_embed = sg_proj_layer(updated_prompt_embed)
+                #updated_prompt_embed = sg_proj_layer(updated_prompt_embed)
 
                 cross_attention_kwargs = {}
 

@@ -38,6 +38,8 @@ from diffusers.pipelines.stable_diffusion.safety_checker import StableDiffusionS
 import PIL
 import numpy as np
 
+from models.token_to_scenegraph import TokenToSceneGraph
+
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -173,6 +175,9 @@ class StableDiffusionTextSGPipeline(DiffusionPipeline):
         )
         self.vae_scale_factor = 2 ** (len(self.vae.config.block_out_channels) - 1)
         self.register_to_config(requires_safety_checker=requires_safety_checker)
+
+        clip_dim = text_encoder.config.hidden_size  # typically 768 for CLIP-L/14
+        self.token_to_sg = TokenToSceneGraph(token_dim=clip_dim, K=8, heads=4)
 
     def enable_vae_slicing(self):
         r"""
@@ -318,7 +323,7 @@ class StableDiffusionTextSGPipeline(DiffusionPipeline):
             batch_size = len(prompt)
         else:
             batch_size = prompt_embeds.shape[0]
-
+        
         if prompt_embeds is None:
             text_inputs = self.tokenizer(
                 prompt,
@@ -655,17 +660,28 @@ class StableDiffusionTextSGPipeline(DiffusionPipeline):
                 n = prompt_embeds.shape[0]
                 prompt_cond = prompt_embeds[n//2:,:,:]
 
-                prompt_cond = adapter(prompt_cond, sg_embed, cross_attention_mask=sg_attention_mask, self_attention_mask=self_attention_mask)
-                
-                cond_projection = nn.Linear(1024, 768)
-                cond_projection.to("cuda")
-                prompt_cond = cond_projection(prompt_cond)
-                
-                prompt_embeds[n//2:,:,:] = prompt_cond
-            else:
-                # text_updater.to(prompt_embeds.dtype)
-                prompt_embeds = adapter(prompt_embeds, sg_embed, cross_attention_mask=sg_attention_mask, self_attention_mask=self_attention_mask)
+                # run token→graph module
+                token_mask = torch.ones(prompt_cond.shape[:2], device=prompt_cond.device, dtype=torch.long)
+                S, V_nodes, _ = self.token_to_sg(prompt_cond, token_mask=token_mask)
 
+                # run adapter (already modified to accept node_embeddings and token_node_assign)
+                prompt_cond = adapter(
+                    prompt_cond, node_embeddings=V_nodes, token_node_assign=S, self_attention_mask=self_attention_mask
+                )
+
+                # project back to CLIP dim if needed
+                if prompt_cond.shape[-1] != origin_prompt_embeds.shape[-1]:
+                    cond_projection = nn.Linear(prompt_cond.shape[-1], origin_prompt_embeds.shape[-1]).to(device)
+                    prompt_cond = cond_projection(prompt_cond)
+
+                prompt_embeds[n // 2 :, :, :] = prompt_cond
+            else:
+                token_mask = torch.ones(prompt_embeds.shape[:2], device=prompt_embeds.device, dtype=torch.long)
+                S, V_nodes, _ = self.token_to_sg(prompt_embeds, token_mask=token_mask)
+                prompt_embeds = adapter(
+                    prompt_embeds, node_embeddings=V_nodes, token_node_assign=S, self_attention_mask=self_attention_mask
+                )
+                
         # 4. Prepare timesteps
         self.scheduler.set_timesteps(num_inference_steps, device=device)
         timesteps = self.scheduler.timesteps

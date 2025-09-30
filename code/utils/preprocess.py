@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 from transformers import CLIPTextModel, CLIPTokenizer
 from datasets import load_dataset
 import json
@@ -402,3 +403,38 @@ def preprocess_scenegraph(examples, text_encoder, tokenizer, args):
             clip_attention_mask_list.append(clip_attention_mask)
         examples['clip_attention_mask'] = clip_attention_mask_list
 
+
+def mapping_to_onehot(mapping_tensor, B, N, K, device):
+    """
+    mapping_tensor: list/array shape [B, N] with -1 for padding tokens and indices in [0,K-1]
+    returns one-hot T: [B,N,K]
+    """
+    T = torch.zeros(B, N, K, device=device)
+    # mapping_tensor must be an integer tensor with -1 for padding
+    mask = (mapping_tensor >= 0)
+    idx = mapping_tensor.clamp(min=0)
+    T[torch.arange(B).unsqueeze(1).to(device), torch.arange(N).unsqueeze(0).to(device), idx] = 1.0
+    T = T * mask.unsqueeze(-1)
+    return T
+
+def assignment_loss(pred_S, gt_T, token_mask=None):
+    """
+    pred_S: [B,N,K] soft predictions
+    gt_T: [B,N,K] one-hot targets (or multi-hot)
+    token_mask: [B,N] 1 for valid token
+    return: scalar BCE/CE loss
+    """
+    eps = 1e-8
+    # Use cross-entropy per token if gt_T is one-hot:
+    # Convert gt_T to index:
+    idx = gt_T.argmax(dim=-1)  # [B,N]
+    B, N, K = pred_S.shape
+    pred_flat = pred_S.view(B * N, K)
+    idx_flat = idx.view(B * N)
+    loss = F.nll_loss(torch.log(pred_flat + eps), idx_flat, reduction='none')  # per token
+    if token_mask is not None:
+        loss = loss * token_mask.view(-1)
+        denom = token_mask.sum().clamp(min=1.0)
+    else:
+        denom = float(B * N)
+    return loss.sum() / denom
