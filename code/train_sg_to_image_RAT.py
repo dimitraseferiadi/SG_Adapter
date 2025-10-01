@@ -717,14 +717,14 @@ def main():
     if args.use_self_attn_mask:
         adapter = RelationAttentionWithSelfAttention(
             sg_emb_dim=3080,
-            query_dim=768,
+            query_dim=1024,
             n_heads=8,
             d_head=128,
         )
     else:
         adapter = RelationAttention(
             sg_emb_dim=3080,
-            query_dim=768,
+            query_dim=1024,
             n_heads=8,
             d_head=128,
             pooling=args.use_pooling
@@ -1095,12 +1095,12 @@ def main():
                 sg_proj_layer.to(dtype=weight_dtype)
                 updated_prompt_embed = adapter(
                     prompt_embed, 
-                    batch["scenegraph_embeddings"], 
-                    cross_attention_mask=batch["sg_attention_masks"] if args.use_sg_attn_mask else None,
-                    self_attention_mask=batch["self_attention_masks"] if args.use_self_attn_mask else None
+                    node_embeddings=batch["scenegraph_embeddings"],
+                    token_node_assign=batch["sg_attention_masks"] if args.use_sg_attn_mask else None,
+                    self_attention_mask=batch["self_attention_masks"] if args.use_self_attn_mask else None,
                 ).to(dtype=weight_dtype)
 
-                #updated_prompt_embed = sg_proj_layer(updated_prompt_embed)
+                updated_prompt_embed = sg_proj_layer(updated_prompt_embed)
 
                 cross_attention_kwargs = {}
 
