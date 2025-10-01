@@ -177,7 +177,14 @@ class StableDiffusionTextSGPipeline(DiffusionPipeline):
         self.register_to_config(requires_safety_checker=requires_safety_checker)
 
         clip_dim = text_encoder.config.hidden_size  # typically 768 for CLIP-L/14
-        self.token_to_sg = TokenToSceneGraph(token_dim=clip_dim, K=8, heads=4)
+        self.token_to_sg = TokenToSceneGraph(
+            token_dim=clip_dim,
+            K=8,
+            node_dim=3080,
+            heads=4,
+            hidden_dim=512,
+            use_bilinear=False
+        )
         self.token_to_sg = self.token_to_sg.to(self.device) 
 
 
