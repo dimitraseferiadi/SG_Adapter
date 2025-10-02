@@ -200,9 +200,13 @@ def log_validation(vae, text_encoder, tokenizer, unet, adapter, args, accelerato
                 token_mask = torch.ones(prompt_embeds.shape[:2], device=prompt_embeds.device, dtype=torch.long)
                 S, V_nodes, _ = pipeline.token_to_sg(prompt_embeds, token_mask=token_mask)
 
-                encoder_attention_mask = generate_encoder_attention_mask(
-                    inputs.attention_mask
-                ).repeat(2,1).to(device=accelerator.device, dtype=weight_dtype)
+                attn_mask = tokenizer(
+                    validation_input['caption'], 
+                    padding=True, 
+                    return_tensors="pt"
+                ).attention_mask.to(accelerator.device)
+
+                encoder_attention_mask = generate_encoder_attention_mask(attn_mask).repeat(2, 1)
 
                 if 'mapping' in validation_input.keys():
                     sg_attention_mask = generate_sg_attention_mask(validation_input['mapping']).to(device=accelerator.device, dtype=weight_dtype)
