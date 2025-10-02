@@ -690,10 +690,6 @@ class StableDiffusionTextSGPipeline(DiffusionPipeline):
                 prompt_embeds = adapter(
                     prompt_embeds, node_embeddings=V_nodes, token_node_assign=S, self_attention_mask=self_attention_mask
                 )
-                # project back to CLIP dim if needed
-                if prompt_embeds.shape[-1] != origin_prompt_embeds.shape[-1]:
-                    cond_projection = nn.Linear(prompt_embeds.shape[-1], origin_prompt_embeds.shape[-1]).to(device)
-                    prompt_embeds = cond_projection(prompt_embeds)
                 
         # 4. Prepare timesteps
         self.scheduler.set_timesteps(num_inference_steps, device=device)

@@ -189,17 +189,21 @@ def log_validation(vae, text_encoder, tokenizer, unet, adapter, args, accelerato
                 else:
                     generator = torch.Generator(device=accelerator.device).manual_seed(seed)
 
-                sg_embed = extract_sg_embed(
-                        objects=validation_input['objects'], 
-                        relations=validation_input['relations'], 
-                        text_encoder=pipeline.text_encoder, 
-                        tokenizer=pipeline.tokenizer, wo_triplet=args.wo_linear
-                    ).to(device=accelerator.device, dtype=weight_dtype)
-                
+                inputs = tokenizer(
+                    validation_input['caption'],
+                    padding=True,
+                    return_tensors="pt"
+                ).to(accelerator.device)
+
+                prompt_embeds = pipeline.text_encoder(inputs.input_ids)[0]
+
+                token_mask = torch.ones(prompt_embeds.shape[:2], device=prompt_embeds.device, dtype=torch.long)
+                S, V_nodes, _ = pipeline.token_to_sg(prompt_embeds, token_mask=token_mask)
+
                 encoder_attention_mask = generate_encoder_attention_mask(
-                    tokenizer(validation_input['caption'], padding=True, return_tensors="pt").attention_mask
-                    ).repeat(2,1).to(device=accelerator.device, dtype=weight_dtype)
-                
+                    inputs.attention_mask
+                ).repeat(2,1).to(device=accelerator.device, dtype=weight_dtype)
+
                 if 'mapping' in validation_input.keys():
                     sg_attention_mask = generate_sg_attention_mask(validation_input['mapping']).to(device=accelerator.device, dtype=weight_dtype)
                     clip_attention_mask = generate_clip_attention_mask(validation_input['mapping']).to(device=accelerator.device, dtype=weight_dtype)
@@ -220,7 +224,8 @@ def log_validation(vae, text_encoder, tokenizer, unet, adapter, args, accelerato
                             num_inference_steps=20, 
                             generator=generator,
                             adapter=accelerator.unwrap_model(adapter),
-                            sg_embed=sg_embed,
+                            node_embeddings=V_nodes,
+                            token_node_assign=S, 
                             encoder_attention_mask=encoder_attention_mask if args.use_encoder_attn_mask else None,
                             sg_attention_mask=sg_attention_mask if args.use_sg_attn_mask else None,
                             self_attention_mask=self_attention_mask if args.use_self_attn_mask else None,
