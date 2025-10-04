@@ -55,6 +55,8 @@ from utils.preprocess import *
 from utils.clip_util import *
 from models.text_updater import *
 
+from models.token_to_scenegraph import TokenToSceneGraph
+
 
 if is_wandb_available():
     import wandb
@@ -742,14 +744,13 @@ def main():
         )
     
     # --- 🔧 fix any mismatched linear layer ---
-    
-    if hasattr(adapter, "linear") and isinstance(adapter.linear[0], nn.Linear):
-        in_dim = adapter.linear[0].in_features
-        if in_dim != 3080:
-            print(f"[Adapter Fix] Replacing adapter.linear input dim {in_dim} → 3080")
-            out_dim = adapter.linear[0].out_features
-            device = adapter.linear[0].weight.device
-            adapter.linear[0] = nn.Linear(3080, out_dim).to(device)
+    for name, module in adapter.named_modules():
+        if isinstance(module, nn.Linear):
+            if module.in_features == 2312:
+                print(f"[Adapter Fix] Replacing {name} input dim {module.in_features} → 3080")
+                new_layer = nn.Linear(3080, module.out_features).to(module.weight.device)
+                setattr(adapter.linear, 0, new_layer)  # adjust this if it's adapter.linear[0]
+
     # ------------------------------------------
 
     # Move to device
@@ -1118,10 +1119,37 @@ def main():
 
                 sg_proj_layer.to(prompt_embed.device)
                 sg_proj_layer.to(dtype=weight_dtype)
+
+                pipeline = StableDiffusionTextSGPipeline.from_pretrained(
+                    args.pretrained_model_name_or_path,
+                    vae=accelerator.unwrap_model(vae),
+                    text_encoder=accelerator.unwrap_model(text_encoder),
+                    tokenizer=tokenizer,
+                    unet=accelerator.unwrap_model(unet),
+                    safety_checker=None,
+                    revision=args.revision,
+                    torch_dtype=weight_dtype,
+                )
+                pipeline = pipeline.to(prompt_embed.device)
+                pipeline.set_progress_bar_config(disable=True)
+
+                token_mask = torch.ones(prompt_embed.shape[:2], device=prompt_embed.device, dtype=torch.bool)
+                
+                target_dtype = pipeline.text_encoder.dtype
+                prompt_embed = prompt_embed.to(dtype=target_dtype)
+                pipeline.token_to_sg = pipeline.token_to_sg.to(dtype=target_dtype)
+                
+                S, node_embeddings, E_logits = pipeline.token_to_sg(prompt_embed, token_mask=token_mask)
+
+                if node_embeddings.shape[-1] == 2312:
+                    print("[TEMP FIX] Expanding node_embeddings from 2312 → 3080 for validation")
+                    proj = torch.nn.Linear(2312, 3080).to(node_embeddings.device, dtype=node_embeddings.dtype)
+                    node_embeddings = proj(node_embeddings)
+
                 updated_prompt_embed = adapter(
                     prompt_embed, 
-                    node_embeddings=batch["scenegraph_embeddings"],
-                    token_node_assign=batch["sg_attention_masks"] if args.use_sg_attn_mask else None,
+                    node_embeddings=node_embeddings,
+                    token_node_assign=S,
                     self_attention_mask=batch["self_attention_masks"] if args.use_self_attn_mask else None,
                 ).to(dtype=weight_dtype)
 
