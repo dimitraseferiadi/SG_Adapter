@@ -207,6 +207,7 @@ def log_validation(vae, text_encoder, tokenizer, unet, adapter, args, accelerato
                 ).attention_mask.to(accelerator.device)
 
                 encoder_attention_mask = generate_encoder_attention_mask(attn_mask).repeat(2, 1)
+                encoder_attention_mask = encoder_attention_mask.to(dtype=weight_dtype)
 
                 if 'mapping' in validation_input.keys():
                     sg_attention_mask = generate_sg_attention_mask(validation_input['mapping']).to(device=accelerator.device, dtype=weight_dtype)

@@ -232,15 +232,26 @@ def generate_encoder_attention_mask(input_mask, sequence_length=77):
     Returns:
     - encoder_attention_mask (`torch.Tensor`): The padded mask tensor of shape `(batch_size, sequence_length)`.
     """
+    device = input_mask.device  # Ensure all tensors are on the same device
+    
     # Convert ones to True and zeros to False
     bool_mask = input_mask.bool()
-    
+
     # Pad the mask to the desired sequence length
     padding_size = sequence_length - input_mask.size(1)
-    padding = torch.full((input_mask.size(0), padding_size), False, dtype=torch.bool)
-    encoder_attention_mask = torch.cat([bool_mask, padding], dim=1)
-    
+    if padding_size > 0:
+        padding = torch.full(
+            (input_mask.size(0), padding_size),
+            False,
+            dtype=torch.bool,
+            device=device,       # ✅ put padding on the same device
+        )
+        encoder_attention_mask = torch.cat([bool_mask, padding], dim=1)
+    else:
+        encoder_attention_mask = bool_mask[:, :sequence_length]
+
     return encoder_attention_mask
+
 
 def generate_self_attention_mask(mapping, batch_size=1, text_length=77, dtype=torch.float16):
     # Initialize the mask with False values
