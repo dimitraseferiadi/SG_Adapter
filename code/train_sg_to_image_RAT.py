@@ -26,6 +26,7 @@ import datasets
 import numpy as np
 import torch
 import torch.nn.functional as F
+import torch.nn as nn
 import torch.utils.checkpoint
 import transformers
 from accelerate import Accelerator
@@ -739,7 +740,21 @@ def main():
             d_head=128,
             pooling=args.use_pooling
         )
+    
+    # --- 🔧 fix any mismatched linear layer ---
+    
+    if hasattr(adapter, "linear") and isinstance(adapter.linear[0], nn.Linear):
+        in_dim = adapter.linear[0].in_features
+        if in_dim != 3080:
+            print(f"[Adapter Fix] Replacing adapter.linear input dim {in_dim} → 3080")
+            out_dim = adapter.linear[0].out_features
+            device = adapter.linear[0].weight.device
+            adapter.linear[0] = nn.Linear(3080, out_dim).to(device)
+    # ------------------------------------------
 
+    # Move to device
+    adapter = adapter.to(accelerator.device)
+    
     # Create EMA for the unet.
     if args.use_ema:
         ema_unet = UNet2DConditionModel.from_pretrained(
