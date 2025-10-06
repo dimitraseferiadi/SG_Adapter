@@ -93,7 +93,8 @@ class TokenToSceneGraph(nn.Module):
         if token_mask is not None:
             # token_mask: 1 real, 0 pad -> mask where pad==1
             pad_mask = (token_mask == 0).unsqueeze(1)  # [B, 1, N]
-            scores = scores.masked_fill(pad_mask, -1e9)
+            scores = scores.masked_fill(pad_mask, torch.finfo(scores.dtype).min)
+
 
         # convert [B,K,N] -> [B,N,K] for per-token distribution
         scores_t = scores.transpose(1, 2)  # [B, N, K]
