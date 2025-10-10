@@ -39,6 +39,7 @@ import PIL
 import numpy as np
 
 from models.token_to_scenegraph import TokenToSceneGraph
+from models.relational_gnn import RelationalGNNLayer
 
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
@@ -183,7 +184,8 @@ class StableDiffusionTextSGPipeline(DiffusionPipeline):
             node_dim=3080,
             heads=4,
             hidden_dim=512,
-            use_bilinear=False
+            use_bilinear=False,
+            num_gnn_layers=args.num_gnn_layers
         )
         self.token_to_sg = self.token_to_sg.to(self.device) 
 
