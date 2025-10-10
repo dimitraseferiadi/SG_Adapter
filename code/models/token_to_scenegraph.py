@@ -4,6 +4,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from models.relational_gnn import RelationalGNNLayer
+
 class TokenToSceneGraph(nn.Module):
     """
     Learnable replacement for deterministic parser τ(·).
@@ -25,6 +27,7 @@ class TokenToSceneGraph(nn.Module):
         heads: int = 4,
         hidden_dim: int = 512,
         use_bilinear: bool = False,
+        num_gnn_layers: int = 1,
     ):
         super().__init__()
         self.token_dim = token_dim
@@ -32,6 +35,7 @@ class TokenToSceneGraph(nn.Module):
         self.node_dim = node_dim or token_dim
         self.heads = heads
         self.use_bilinear = use_bilinear
+        self.num_gnn_layers = num_gnn_layers
 
         # learnable node prototypes (queries)
         self.node_queries = nn.Parameter(torch.randn(1, K, self.node_dim) * 0.02)
@@ -56,6 +60,13 @@ class TokenToSceneGraph(nn.Module):
 
         # small scalar gate to optionally fuse prototype and aggregated tokens
         self.fuse_gate = nn.Parameter(torch.tensor(0.0))
+
+        if self.num_gnn_layers > 0:
+            self.gnn_layers = nn.ModuleList([
+                RelationalGNNLayer(self.node_dim) for _ in range(self.num_gnn_layers)
+            ])
+        else:
+            self.gnn_layers = None
 
     def forward(self, w: torch.Tensor, token_mask: torch.Tensor | None = None, discrete: bool = False, eps: float = 1e-8):
         """
@@ -113,11 +124,42 @@ class TokenToSceneGraph(nn.Module):
         gate = torch.sigmoid(self.fuse_gate)
         V = (1 - gate) * V + gate * q
 
-        # compute pairwise edge logits E_logits [B, K, K]
-        Vi = V.unsqueeze(2).expand(B, self.K, self.K, Dn)  # [B,K,K,D]
+# ---------------------------------------------
+        # --- NEW: Apply Relational GNN Message Passing ---
+        # ---------------------------------------------
+        if self.gnn_layers is not None:
+            # 1. Compute initial pairwise edge logits (E_logits) from unfined V
+            Vi = V.unsqueeze(2).expand(B, self.K, self.K, Dn)  # [B,K,K,D]
+            Vj = V.unsqueeze(1).expand(B, self.K, self.K, Dn)
+            pair = torch.cat([Vi, Vj], dim=-1)  # [B,K,K,2D]
+
+            if self.use_bilinear:
+                flat_i = Vi.reshape(B * self.K * self.K, Dn)
+                flat_j = Vj.reshape(B * self.K * self.K, Dn)
+                e_flat = self.edge_bilinear(flat_i, flat_j).view(B, self.K, self.K)
+                E_logits = e_flat
+            else:
+                e_flat = self.edge_mlp(pair)  # [B, K, K, 1]
+                E_logits = e_flat.squeeze(-1) # [B, K, K]
+
+            # 2. Pass V and E_logits through the GNN layers
+            V_refined = V
+            for gnn_layer in self.gnn_layers:
+                V_refined = gnn_layer(V_refined, E_logits)
+
+            # Update V to V_refined for the final output
+            V = V_refined
+        
+        # ---------------------------------------------
+        # --- Old code for final E_logits (kept for compatibility, may use V_refined) ---
+        # ---------------------------------------------
+        # Recalculate E_logits using the final V (which might be V_refined)
+        Vi = V.unsqueeze(2).expand(B, self.K, self.K, Dn)
         Vj = V.unsqueeze(1).expand(B, self.K, self.K, Dn)
-        pair = torch.cat([Vi, Vj], dim=-1)  # [B,K,K,2D]
+        pair = torch.cat([Vi, Vj], dim=-1)
+
         if self.use_bilinear:
+            # ... (rest of bilinear calculation using flat_i, flat_j from V)
             flat_i = Vi.reshape(B * self.K * self.K, Dn)
             flat_j = Vj.reshape(B * self.K * self.K, Dn)
             e_flat = self.edge_bilinear(flat_i, flat_j).view(B, self.K, self.K)
@@ -126,4 +168,6 @@ class TokenToSceneGraph(nn.Module):
             e_flat = self.edge_mlp(pair)  # [B, K, K, 1]
             E_logits = e_flat.squeeze(-1)
 
+        # ---------------------------------------------
+        
         return S, V, E_logits
