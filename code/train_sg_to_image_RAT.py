@@ -613,6 +613,16 @@ def parse_args():
         ),
     )
 
+    parser.add_argument(
+        "--num_gnn_layers",
+        type=int,
+        default=0, # Default to 0 for backward compatibility/no GNN
+        help=(
+            "Number of Relational GNN layers to apply after soft node extraction."
+        ),
+    )
+    
+
     args = parser.parse_args()
     env_local_rank = int(os.environ.get("LOCAL_RANK", -1))
     if env_local_rank != -1 and env_local_rank != args.local_rank:
