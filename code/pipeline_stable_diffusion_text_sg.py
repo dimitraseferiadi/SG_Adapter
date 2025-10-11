@@ -98,6 +98,7 @@ class StableDiffusionTextSGPipeline(DiffusionPipeline):
         safety_checker: StableDiffusionSafetyChecker,
         feature_extractor: CLIPFeatureExtractor,
         requires_safety_checker: bool = True,
+        num_gnn_layers: int = 1,
     ):
         super().__init__()
 
@@ -185,7 +186,7 @@ class StableDiffusionTextSGPipeline(DiffusionPipeline):
             heads=4,
             hidden_dim=512,
             use_bilinear=False,
-            num_gnn_layers=args.num_gnn_layers
+            num_gnn_layers=num_gnn_layers
         )
         self.token_to_sg = self.token_to_sg.to(self.device) 
 
