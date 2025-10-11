@@ -166,6 +166,7 @@ def log_validation(vae, text_encoder, tokenizer, unet, adapter, args, accelerato
         safety_checker=None,
         revision=args.revision,
         torch_dtype=weight_dtype,
+        num_gnn_layers=args.num_gnn_layers,
     )
     pipeline = pipeline.to(accelerator.device)
     pipeline.set_progress_bar_config(disable=True)
@@ -1139,6 +1140,7 @@ def main():
                     safety_checker=None,
                     revision=args.revision,
                     torch_dtype=weight_dtype,
+                    num_gnn_layers=args.num_gnn_layers,
                 )
                 pipeline = pipeline.to(prompt_embed.device)
                 pipeline.set_progress_bar_config(disable=True)
