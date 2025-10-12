@@ -11,14 +11,15 @@ class RelationalGNNLayer(nn.Module):
     def __init__(self, node_dim):
         super().__init__()
         self.node_dim = node_dim
+        concat_dim = node_dim * 2
 
         # Projects node features before sending them as messages
         self.msg_proj = nn.Linear(node_dim, node_dim)
         
         # LayerNorm and MLP for the final update/combination of self-features and aggregated messages
-        self.norm = nn.LayerNorm(node_dim)
+        self.norm = nn.LayerNorm(concat_dim)
         self.update_mlp = nn.Sequential(
-            nn.Linear(node_dim * 2, node_dim),
+            nn.Linear(concat_dim, node_dim),
             nn.ReLU(),
             nn.Linear(node_dim, node_dim)
         )
