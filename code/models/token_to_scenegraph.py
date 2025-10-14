@@ -37,6 +37,8 @@ class TokenToSceneGraph(nn.Module):
         self.use_bilinear = use_bilinear
         self.num_gnn_layers = num_gnn_layers
 
+        self.triplet_fusion = RelationalTripletFusion(self.node_dim)    
+
         # learnable node prototypes (queries)
         self.node_queries = nn.Parameter(torch.randn(1, K, self.node_dim) * 0.02)
 
@@ -149,25 +151,17 @@ class TokenToSceneGraph(nn.Module):
 
             # Update V to V_refined for the final output
             V = V_refined
+            
+        # Fuse the refined Node Feature (V) with the predicted Edge Logits (E_logits)
+        # to create the final Relational Triplet Feature (V_fused). 
+        # This resolves the semantic mismatch by producing a triplet-centric feature.
         
-        # ---------------------------------------------
-        # --- Old code for final E_logits (kept for compatibility, may use V_refined) ---
-        # ---------------------------------------------
-        # Recalculate E_logits using the final V (which might be V_refined)
-        Vi = V.unsqueeze(2).expand(B, self.K, self.K, Dn)
-        Vj = V.unsqueeze(1).expand(B, self.K, self.K, Dn)
-        pair = torch.cat([Vi, Vj], dim=-1)
-
-        if self.use_bilinear:
-            # ... (rest of bilinear calculation using flat_i, flat_j from V)
-            flat_i = Vi.reshape(B * self.K * self.K, Dn)
-            flat_j = Vj.reshape(B * self.K * self.K, Dn)
-            e_flat = self.edge_bilinear(flat_i, flat_j).view(B, self.K, self.K)
-            E_logits = e_flat
-        else:
-            e_flat = self.edge_mlp(pair)  # [B, K, K, 1]
-            E_logits = e_flat.squeeze(-1)
-
-        # ---------------------------------------------
+        V_fused = self.triplet_fusion(V, E_logits)
         
+        # V is now the final Triplet-Contextualized Feature, ready for the adapter
+        V = V_fused
+
+        # Return the soft assignment (S) and the new Triplet-Contextualized Feature (V)
+        # S: [B, N, K] (Mask)
+        # V: [B, K, D] (The Triplet/Relational features for cross-attention)
         return S, V, E_logits
