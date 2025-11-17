@@ -126,9 +126,7 @@ class TokenToSceneGraph(nn.Module):
         gate = torch.sigmoid(self.fuse_gate)
         V = (1 - gate) * V + gate * q
 
-# ---------------------------------------------
-        # --- NEW: Apply Relational GNN Message Passing ---
-        # ---------------------------------------------
+        # Apply Relational GNN Message Passing
         if self.gnn_layers is not None:
             # 1. Compute initial pairwise edge logits (E_logits) from unfined V
             Vi = V.unsqueeze(2).expand(B, self.K, self.K, Dn)  # [B,K,K,D]
