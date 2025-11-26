@@ -1043,8 +1043,6 @@ def main():
     progress_bar = tqdm(range(global_step, args.max_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Steps")
 
-    sg_proj_layer = torch.nn.Linear(1024, 768)
-
     for epoch in range(first_epoch, args.num_train_epochs):
         print(f"Epoch: {epoch}")
         adapter.train()
