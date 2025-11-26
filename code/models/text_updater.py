@@ -18,9 +18,6 @@ class RelationAttentionWithSelfAttention(ModelMixin, ConfigMixin):
     ):
         super().__init__()
 
-        # project incoming CLIP token features into query_dim
-        self.proj_in = nn.Linear(768, query_dim)
-
         # project node embeddings (V) into the same dimension as queries
         # Keep API consistent with prior code by using sg_emb_dim as input dim for linear
         self.linear = nn.Sequential(
@@ -94,9 +91,6 @@ class RelationAttention(ModelMixin, ConfigMixin):
     ):
         super().__init__()
 
-        self.proj_in = nn.Linear(768, query_dim)
-
-        # note: original code used 2312 as input dim for sg; keep flexible by using sg_emb_dim
         self.linear = nn.Sequential(
             nn.Linear(sg_emb_dim, query_dim),
             nn.SiLU(),
@@ -127,8 +121,6 @@ class RelationAttention(ModelMixin, ConfigMixin):
             token_node_assign: [B, N, K] (soft assignments). If None, attention bias is not applied.
             self_attention_mask: optional mask for self-attention
         """
-        x = self.proj_in(x)  # [B, N, query_dim]
-
         sg_proj = self.linear(node_embeddings)  # [B, K, query_dim]
 
         # attention bias built from token->node assignments

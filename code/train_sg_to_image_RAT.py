@@ -184,7 +184,7 @@ def log_validation(vae, text_encoder, tokenizer, unet, adapter, args, accelerato
         save_image_dir = os.path.join(args.output_dir, f"images-{global_step}")
         os.makedirs(save_image_dir, exist_ok=True)
 
-        with torch.autocast("cuda"):
+        with torch.autocast("mps"):
             for idx, validation_input in enumerate(validation_inputs):
 
                 seed = args.seed
@@ -245,7 +245,7 @@ def log_validation(vae, text_encoder, tokenizer, unet, adapter, args, accelerato
                     generator.manual_seed(seed)
 
     del pipeline
-    torch.cuda.empty_cache()
+    torch.mps.empty_cache()
     return None
 
 def parse_args():
@@ -753,16 +753,6 @@ def main():
             d_head=128,
             pooling=args.use_pooling
         )
-    
-    # --- 🔧 fix any mismatched linear layer ---
-    for name, module in adapter.named_modules():
-        if isinstance(module, nn.Linear):
-            if module.in_features == 2312:
-                print(f"[Adapter Fix] Replacing {name} input dim {module.in_features} → 3080")
-                new_layer = nn.Linear(3080, module.out_features).to(module.weight.device)
-                setattr(adapter.linear, 0, new_layer)  # adjust this if it's adapter.linear[0]
-
-    # ------------------------------------------
 
     # Move to device
     adapter = adapter.to(accelerator.device)
@@ -852,7 +842,7 @@ def main():
     # Enable TF32 for faster training on Ampere GPUs,
     # cf https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices
     if args.allow_tf32:
-        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.mps.matmul.allow_tf32 = True
 
     if args.scale_lr:
         args.learning_rate = (
@@ -1080,8 +1070,6 @@ def main():
     progress_bar = tqdm(range(global_step, args.max_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Steps")
 
-    sg_proj_layer = torch.nn.Linear(1024, 768)
-
     for epoch in range(first_epoch, args.num_train_epochs):
         print(f"Epoch: {epoch}")
         adapter.train()
@@ -1128,9 +1116,6 @@ def main():
                 #print("prompt embed aka x", prompt_embed.shape)
                 #print('batch[scenegraph_embeddings] aka sg_embed', batch["scenegraph_embeddings"].shape)
 
-                sg_proj_layer.to(prompt_embed.device)
-                sg_proj_layer.to(dtype=weight_dtype)
-
                 pipeline = StableDiffusionTextSGPipeline.from_pretrained(
                     args.pretrained_model_name_or_path,
                     vae=accelerator.unwrap_model(vae),
@@ -1153,19 +1138,12 @@ def main():
                 
                 S, node_embeddings, E_logits = pipeline.token_to_sg(prompt_embed, token_mask=token_mask)
 
-                if node_embeddings.shape[-1] == 2312:
-                    print("[TEMP FIX] Expanding node_embeddings from 2312 → 3080 for validation")
-                    proj = torch.nn.Linear(2312, 3080).to(node_embeddings.device, dtype=node_embeddings.dtype)
-                    node_embeddings = proj(node_embeddings)
-
                 updated_prompt_embed = adapter(
                     prompt_embed, 
                     node_embeddings=node_embeddings,
                     token_node_assign=S,
                     self_attention_mask=batch["self_attention_masks"] if args.use_self_attn_mask else None,
                 ).to(dtype=weight_dtype)
-
-                updated_prompt_embed = sg_proj_layer(updated_prompt_embed)
 
                 cross_attention_kwargs = {}
 
@@ -1319,7 +1297,7 @@ def main():
                 generator = torch.Generator(device=accelerator.device).manual_seed(args.seed)
 
             for i in range(len(args.validation_prompts)):
-                with torch.autocast("cuda"):
+                with torch.autocast("mps"):
                     image = pipeline(args.validation_prompts[i], num_inference_steps=20, generator=generator).images[0]
                 images.append(image)
 

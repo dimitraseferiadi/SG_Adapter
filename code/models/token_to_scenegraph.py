@@ -3,7 +3,8 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+from typing import Optional
+from models.triplet_fusion import RelationalTripletFusion 
 from models.relational_gnn import RelationalGNNLayer
 
 class TokenToSceneGraph(nn.Module):
@@ -23,7 +24,7 @@ class TokenToSceneGraph(nn.Module):
         self,
         token_dim: int,
         K: int = 8,
-        node_dim: int | None = None,
+        node_dim: Optional[int] = None,
         heads: int = 4,
         hidden_dim: int = 512,
         use_bilinear: bool = False,
@@ -70,7 +71,7 @@ class TokenToSceneGraph(nn.Module):
         else:
             self.gnn_layers = None
 
-    def forward(self, w: torch.Tensor, token_mask: torch.Tensor | None = None, discrete: bool = False, eps: float = 1e-8):
+    def forward(self, w: torch.Tensor, token_mask: Optional[torch.Tensor] = None, discrete: bool = False, eps: float = 1e-8):
         """
         Args:
             w: [B, N, D_token]

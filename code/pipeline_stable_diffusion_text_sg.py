@@ -240,7 +240,7 @@ class StableDiffusionTextSGPipeline(DiffusionPipeline):
 
         if self.device.type != "cpu":
             self.to("cpu", silence_dtype_warnings=True)
-            torch.cuda.empty_cache()  # otherwise we don't see the memory savings (but they probably exist)
+            torch.mps.empty_cache()  # otherwise we don't see the memory savings (but they probably exist)
 
         for cpu_offloaded_model in [self.unet, self.text_encoder, self.vae]:
             cpu_offload(cpu_offloaded_model, device)
@@ -264,7 +264,7 @@ class StableDiffusionTextSGPipeline(DiffusionPipeline):
 
         if self.device.type != "cpu":
             self.to("cpu", silence_dtype_warnings=True)
-            torch.cuda.empty_cache()  # otherwise we don't see the memory savings (but they probably exist)
+            torch.mps.empty_cache()  # otherwise we don't see the memory savings (but they probably exist)
 
         hook = None
         for cpu_offloaded_model in [self.text_encoder, self.unet, self.vae]:
@@ -682,11 +682,6 @@ class StableDiffusionTextSGPipeline(DiffusionPipeline):
                     prompt_cond, node_embeddings=V_nodes, token_node_assign=S, self_attention_mask=self_attention_mask
                 )
 
-                # project back to CLIP dim if needed
-                if prompt_cond.shape[-1] != origin_prompt_embeds.shape[-1]:
-                    cond_projection = nn.Linear(prompt_cond.shape[-1], origin_prompt_embeds.shape[-1]).to(device)
-                    prompt_cond = cond_projection(prompt_cond)
-
                 prompt_embeds[n // 2 :, :, :] = prompt_cond
             else:
                 token_mask = torch.ones(prompt_embeds.shape[:2], device=prompt_embeds.device, dtype=torch.long)
@@ -694,12 +689,6 @@ class StableDiffusionTextSGPipeline(DiffusionPipeline):
                 prompt_embeds = adapter(
                     prompt_embeds, node_embeddings=V_nodes, token_node_assign=S, self_attention_mask=self_attention_mask
                 )
-
-                # project back to CLIP dim if needed
-                if prompt_embeds.shape[-1] != origin_prompt_embeds.shape[-1]:
-                    cond_projection = nn.Linear(prompt_embeds.shape[-1], origin_prompt_embeds.shape[-1]).to(device)
-                    prompt_embeds = cond_projection(prompt_embeds)
-
                 
         # 4. Prepare timesteps
         self.scheduler.set_timesteps(num_inference_steps, device=device)
