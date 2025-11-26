@@ -180,7 +180,7 @@ def log_validation(vae, text_encoder, tokenizer, unet, adapter, args, accelerato
         save_image_dir = os.path.join(args.output_dir, f"images-{global_step}")
         os.makedirs(save_image_dir, exist_ok=True)
 
-        with torch.autocast("cuda"):
+        with torch.autocast("mps"):
             for idx, validation_input in enumerate(validation_inputs):
 
                 seed = args.seed
@@ -231,7 +231,7 @@ def log_validation(vae, text_encoder, tokenizer, unet, adapter, args, accelerato
                     generator.manual_seed(seed)
 
     del pipeline
-    torch.cuda.empty_cache()
+    torch.mps.empty_cache()
     return None
 
 def parse_args():
@@ -815,7 +815,7 @@ def main():
     # Enable TF32 for faster training on Ampere GPUs,
     # cf https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices
     if args.allow_tf32:
-        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.mps.matmul.allow_tf32 = True
 
     if args.scale_lr:
         args.learning_rate = (
@@ -1254,7 +1254,7 @@ def main():
                 generator = torch.Generator(device=accelerator.device).manual_seed(args.seed)
 
             for i in range(len(args.validation_prompts)):
-                with torch.autocast("cuda"):
+                with torch.autocast("mps"):
                     image = pipeline(args.validation_prompts[i], num_inference_steps=20, generator=generator).images[0]
                 images.append(image)
 

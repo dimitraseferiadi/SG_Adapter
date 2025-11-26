@@ -223,7 +223,7 @@ class StableDiffusionTextSGPipeline(DiffusionPipeline):
 
         if self.device.type != "cpu":
             self.to("cpu", silence_dtype_warnings=True)
-            torch.cuda.empty_cache()  # otherwise we don't see the memory savings (but they probably exist)
+            torch.mps.empty_cache()  # otherwise we don't see the memory savings (but they probably exist)
 
         for cpu_offloaded_model in [self.unet, self.text_encoder, self.vae]:
             cpu_offload(cpu_offloaded_model, device)
@@ -247,7 +247,7 @@ class StableDiffusionTextSGPipeline(DiffusionPipeline):
 
         if self.device.type != "cpu":
             self.to("cpu", silence_dtype_warnings=True)
-            torch.cuda.empty_cache()  # otherwise we don't see the memory savings (but they probably exist)
+            torch.mps.empty_cache()  # otherwise we don't see the memory savings (but they probably exist)
 
         hook = None
         for cpu_offloaded_model in [self.text_encoder, self.unet, self.vae]:
@@ -656,10 +656,6 @@ class StableDiffusionTextSGPipeline(DiffusionPipeline):
                 prompt_cond = prompt_embeds[n//2:,:,:]
 
                 prompt_cond = adapter(prompt_cond, sg_embed, cross_attention_mask=sg_attention_mask, self_attention_mask=self_attention_mask)
-                
-                cond_projection = nn.Linear(1024, 768)
-                cond_projection.to("cuda")
-                prompt_cond = cond_projection(prompt_cond)
                 
                 prompt_embeds[n//2:,:,:] = prompt_cond
             else:

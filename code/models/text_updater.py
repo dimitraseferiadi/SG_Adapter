@@ -17,8 +17,6 @@ class RelationAttentionWithSelfAttention(ModelMixin, ConfigMixin):
         ):
         super().__init__()
         
-        self.proj_in = nn.Linear(768, query_dim)
-        
         self.linear = nn.Sequential(
             nn.Linear(sg_emb_dim, query_dim),
             nn.SiLU(),
@@ -37,8 +35,6 @@ class RelationAttentionWithSelfAttention(ModelMixin, ConfigMixin):
         self.register_parameter('alpha_self', nn.Parameter(torch.tensor(0.)))
 
     def forward(self, x, sg_embed, cross_attention_mask=None, self_attention_mask=None):
-        
-        x = self.proj_in(x)
 
         sg_embed = self.linear(sg_embed)
         
@@ -60,11 +56,9 @@ class RelationAttention(ModelMixin, ConfigMixin):
             pooling=False
         ):
         super().__init__()
-        
-        self.proj_in = nn.Linear(768, query_dim)
 
         self.linear = nn.Sequential(
-            nn.Linear(2312, query_dim),
+            nn.Linear(sg_emb_dim, query_dim),
             nn.SiLU(),
             nn.Linear(query_dim, query_dim),
             nn.SiLU(),
@@ -85,7 +79,6 @@ class RelationAttention(ModelMixin, ConfigMixin):
             self.register_parameter('alpha_pool', nn.Parameter(torch.tensor(-5.0)))
 
     def forward(self, x, sg_embed, cross_attention_mask=None, self_attention_mask=None):
-        x = self.proj_in(x)
 
         sg_embed = self.linear(sg_embed)
         
