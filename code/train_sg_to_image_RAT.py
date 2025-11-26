@@ -1089,16 +1089,12 @@ def main():
                 #print("prompt embed aka x", prompt_embed.shape)
                 #print('batch[scenegraph_embeddings] aka sg_embed', batch["scenegraph_embeddings"].shape)
 
-                sg_proj_layer.to(prompt_embed.device)
-                sg_proj_layer.to(dtype=weight_dtype)
                 updated_prompt_embed = adapter(
                     prompt_embed, 
                     batch["scenegraph_embeddings"], 
                     cross_attention_mask=batch["sg_attention_masks"] if args.use_sg_attn_mask else None,
                     self_attention_mask=batch["self_attention_masks"] if args.use_self_attn_mask else None
                 ).to(dtype=weight_dtype)
-
-                updated_prompt_embed = sg_proj_layer(updated_prompt_embed)
 
                 cross_attention_kwargs = {}
 
