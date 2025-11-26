@@ -223,7 +223,7 @@ class StableDiffusionTextSGPipeline(DiffusionPipeline):
 
         if self.device.type != "cpu":
             self.to("cpu", silence_dtype_warnings=True)
-            torch.mps.empty_cache()  # otherwise we don't see the memory savings (but they probably exist)
+            torch.cuda.empty_cache()  # otherwise we don't see the memory savings (but they probably exist)
 
         for cpu_offloaded_model in [self.unet, self.text_encoder, self.vae]:
             cpu_offload(cpu_offloaded_model, device)
@@ -247,7 +247,7 @@ class StableDiffusionTextSGPipeline(DiffusionPipeline):
 
         if self.device.type != "cpu":
             self.to("cpu", silence_dtype_warnings=True)
-            torch.mps.empty_cache()  # otherwise we don't see the memory savings (but they probably exist)
+            torch.cuda.empty_cache()  # otherwise we don't see the memory savings (but they probably exist)
 
         hook = None
         for cpu_offloaded_model in [self.text_encoder, self.unet, self.vae]:
@@ -355,7 +355,7 @@ class StableDiffusionTextSGPipeline(DiffusionPipeline):
         prompt_embeds = prompt_embeds.to(dtype=self.text_encoder.dtype, device=device)
 
         bs_embed, seq_len, _ = prompt_embeds.shape
-        # duplicate text embeddings for each generation per prompt, using mps friendly method
+        # duplicate text embeddings for each generation per prompt, using cuda friendly method
         prompt_embeds = prompt_embeds.repeat(1, num_images_per_prompt, 1)
         prompt_embeds = prompt_embeds.view(bs_embed * num_images_per_prompt, seq_len, -1)
 
@@ -401,7 +401,7 @@ class StableDiffusionTextSGPipeline(DiffusionPipeline):
             negative_prompt_embeds = negative_prompt_embeds[0]
 
         if do_classifier_free_guidance:
-            # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
+            # duplicate unconditional embeddings for each generation per prompt, using cuda friendly method
             seq_len = negative_prompt_embeds.shape[1]
 
             negative_prompt_embeds = negative_prompt_embeds.to(dtype=self.text_encoder.dtype, device=device)
