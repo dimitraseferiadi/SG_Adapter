@@ -166,7 +166,6 @@ def log_validation(vae, text_encoder, tokenizer, unet, adapter, args, accelerato
     )
     pipeline = pipeline.to(accelerator.device)
     pipeline.set_progress_bar_config(disable=True)
-    adapter.to(accelerator.device, dtype=weight_dtype)
 
     if args.enable_xformers_memory_efficient_attention:
         pipeline.enable_xformers_memory_efficient_attention()
