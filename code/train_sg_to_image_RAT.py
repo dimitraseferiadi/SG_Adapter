@@ -799,12 +799,18 @@ def main():
                 # pop models so that they are not loaded again
                 model = models.pop()
 
-                # load diffusers style into model
-                load_model = UNet2DConditionModel.from_pretrained(input_dir, subfolder="unet")
-                model.register_to_config(**load_model.config)
-
-                model.load_state_dict(load_model.state_dict())
-                del load_model
+                adapter_dir = os.path.join(input_dir, "adapter")
+                
+                model_file = os.path.join(adapter_dir, "diffusion_pytorch_model.bin")
+                
+                if os.path.exists(model_file):
+                    # Load weights into the existing adapter instance
+                    state_dict = torch.load(model_file, map_location="cpu")
+                    model.load_state_dict(state_dict)
+                    print(f"Successfully loaded adapter from {model_file}")
+                else:
+                    print(f"WARNING: Could not find adapter model at {model_file}")
+                
 
         accelerator.register_save_state_pre_hook(save_model_hook)
         accelerator.register_load_state_pre_hook(load_model_hook)
