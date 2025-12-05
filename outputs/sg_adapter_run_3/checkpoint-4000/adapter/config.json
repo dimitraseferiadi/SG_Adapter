@@ -1,0 +1,9 @@
+{
+  "_class_name": "RelationAttention",
+  "_diffusers_version": "0.18.0",
+  "d_head": 128,
+  "n_heads": 8,
+  "pooling": false,
+  "query_dim": 1024,
+  "sg_emb_dim": 3080
+}
