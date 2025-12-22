@@ -836,15 +836,32 @@ def main():
                 ema_unet.to(accelerator.device)
                 del load_model
 
-            for i in range(len(models)):
-                # pop models so that they are not loaded again
+            while len(models) > 0:
+                # Pop models so they are not loaded again
                 model = models.pop()
+                
+                # Identify the model class to determine which subfolder to load
+                model_class = model.__class__.__name__
+                if hasattr(model, "module"): # Handle DDP wrapping
+                    model_class = model.module.__class__.__name__
 
-                # load diffusers style into model
-                load_model = UNet2DConditionModel.from_pretrained(input_dir, subfolder="unet")
-                model.register_to_config(**load_model.config)
-
-                model.load_state_dict(load_model.state_dict())
+                if "TokenToSceneGraph" in model_class:
+                    # Load TokenToSceneGraph
+                    load_model = TokenToSceneGraph.from_pretrained(input_dir, subfolder="token_to_sg")
+                    model.load_state_dict(load_model.state_dict())
+                else:
+                    # Load Adapter (RelationAttention)
+                    sub_dir = "adapter"
+                    if args.use_self_attn_mask:
+                        cls = RelationAttentionWithSelfAttention
+                    else:
+                        cls = RelationAttention
+                    
+                    load_model = cls.from_pretrained(input_dir, subfolder=sub_dir)
+                    model.load_state_dict(load_model.state_dict())
+                
+                # Move loaded model to correct device
+                model.to(accelerator.device)
                 del load_model
 
         accelerator.register_save_state_pre_hook(save_model_hook)
@@ -1006,8 +1023,8 @@ def main():
     )
 
     # Prepare everything with our `accelerator`.
-    adapter, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
-        adapter, optimizer, train_dataloader, lr_scheduler
+    adapter, pipeline.token_to_sg, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
+        adapter, pipeline.token_to_sg, optimizer, train_dataloader, lr_scheduler
     )
 
     if args.use_ema:
@@ -1077,9 +1094,7 @@ def main():
     # Train!
     total_batch_size = args.train_batch_size * accelerator.num_processes * args.gradient_accumulation_steps
 
-    adapter, pipeline.token_to_sg, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
-        adapter, pipeline.token_to_sg, optimizer, train_dataloader, lr_scheduler
-    )
+
     
     logger.info("***** Running training *****")
     logger.info(f"  Num examples = {len(train_dataset)}")
