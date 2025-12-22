@@ -99,6 +99,7 @@ class StableDiffusionTextSGPipeline(DiffusionPipeline):
         feature_extractor: CLIPFeatureExtractor,
         requires_safety_checker: bool = True,
         num_gnn_layers: int = 1,
+        node_dim: int = 3080,
     ):
         super().__init__()
 
@@ -182,7 +183,7 @@ class StableDiffusionTextSGPipeline(DiffusionPipeline):
         self.token_to_sg = TokenToSceneGraph(
             token_dim=clip_dim,
             K=8,
-            node_dim=3080,
+            node_dim=node_dim,
             heads=4,
             hidden_dim=512,
             use_bilinear=False,

@@ -1000,7 +1000,20 @@ def main():
     def preprocess_train(examples, text_encoder, tokenizer):
         images = [image.convert("RGB") for image in examples[image_column]]
         examples["pixel_values"] = [train_transforms(image) for image in images]
-        examples["input_ids"] = tokenize_captions(examples)
+        
+        captions = []
+        for caption in examples[caption_column]:
+            if isinstance(caption, str):
+                captions.append(caption)
+            elif isinstance(caption, (list, np.ndarray)):
+                captions.append(random.choice(caption))
+        
+        inputs = tokenizer(
+            captions, max_length=tokenizer.model_max_length, padding="max_length", truncation=True, return_tensors="pt"
+        )
+        examples["input_ids"] = inputs.input_ids
+        examples["attention_mask"] = inputs.attention_mask
+        
         preprocess_scenegraph(examples, text_encoder, tokenizer, args)
         
         return examples
@@ -1154,8 +1167,12 @@ def main():
                 #print("prompt embed aka x", prompt_embed.shape)
                 #print('batch[scenegraph_embeddings] aka sg_embed', batch["scenegraph_embeddings"].shape)
 
-                token_mask = torch.ones(prompt_embed.shape[:2], device=prompt_embed.device, dtype=torch.bool)
-
+                if "attention_mask" in batch:
+                    token_mask = batch["attention_mask"].to(prompt_embed.device)
+                else:
+                    # Fallback only if mask is missing
+                    token_mask = torch.ones(prompt_embed.shape[:2], device=prompt_embed.device, dtype=torch.long)
+                    
                 S, node_embeddings, E_logits = pipeline.token_to_sg(prompt_embed, token_mask=token_mask)
 
                 updated_prompt_embed = adapter(

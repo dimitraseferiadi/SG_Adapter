@@ -67,7 +67,7 @@ class RelationalTripletFusion(nn.Module):
         
         # Weighted sum: V_fused_triplet[b, k_obj, d] = sum_{k_sub} [Weight[b, k_obj, k_sub] * T_mapped[b, k_sub, k_obj, d]]
         # Result: [B, K_obj, D] -> Contextualized Feature for each Object slot
-        V_fused_triplet = torch.einsum('boj,bijd->bod', Edge_Weights_Subj, T_mapped) 
+        V_fused_triplet = torch.einsum('bos,bsod->bod', Edge_Weights_Subj, T_mapped)
         
         # 4. Final Interpolation with GNN-Refined Feature
         gate = torch.sigmoid(self.fusion_gate)
