@@ -176,7 +176,7 @@ class StableDiffusionTextSGPipeline(DiffusionPipeline):
             feature_extractor=feature_extractor,
         )
         self.vae_scale_factor = 2 ** (len(self.vae.config.block_out_channels) - 1)
-        self.register_to_config(requires_safety_checker=requires_safety_checker)
+        self.register_to_config(requires_safety_checker=requires_safety_checker, num_gnn_layers=num_gnn_layers)
 
         clip_dim = text_encoder.config.hidden_size  # typically 768 for CLIP-L/14
         self.token_to_sg = TokenToSceneGraph(

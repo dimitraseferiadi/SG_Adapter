@@ -1014,6 +1014,38 @@ def main():
     text_encoder.to(accelerator.device, dtype=weight_dtype)
     vae.to(accelerator.device, dtype=weight_dtype)
 
+    pipeline = StableDiffusionTextSGPipeline.from_pretrained(
+        args.pretrained_model_name_or_path,
+        vae=accelerator.unwrap_model(vae),
+        text_encoder=accelerator.unwrap_model(text_encoder),
+        tokenizer=tokenizer,
+        unet=accelerator.unwrap_model(unet),
+        safety_checker=None,
+        revision=args.revision,
+        torch_dtype=weight_dtype,
+        num_gnn_layers=args.num_gnn_layers,
+    )
+    pipeline.token_to_sg = pipeline.token_to_sg.to(accelerator.device, dtype=weight_dtype)
+    pipeline.set_progress_bar_config(disable=True)
+
+    params_to_optimize = list(adapter.parameters()) + list(pipeline.token_to_sg.parameters())
+
+    if args.use_8bit_adam:
+        try:
+            import bitsandbytes as bnb
+        except ImportError:
+            raise ImportError("Please install bitsandbytes to use 8-bit Adam.")
+        optimizer_cls = bnb.optim.AdamW8bit
+    else:
+        optimizer_cls = torch.optim.AdamW
+
+    optimizer = optimizer_cls(
+        params_to_optimize,  # Updated to include token_to_sg
+        lr=args.learning_rate,
+        betas=(args.adam_beta1, args.adam_beta2),
+        weight_decay=args.adam_weight_decay,
+        eps=args.adam_epsilon,
+    )
     # We need to recalculate our total training steps as the size of the training dataloader may have changed.
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
     if overrode_max_train_steps:
@@ -1031,6 +1063,10 @@ def main():
     # Train!
     total_batch_size = args.train_batch_size * accelerator.num_processes * args.gradient_accumulation_steps
 
+    adapter, pipeline.token_to_sg, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
+        adapter, pipeline.token_to_sg, optimizer, train_dataloader, lr_scheduler
+    )
+    
     logger.info("***** Running training *****")
     logger.info(f"  Num examples = {len(train_dataset)}")
     logger.info(f"  Num Epochs = {args.num_train_epochs}")
@@ -1116,26 +1152,8 @@ def main():
                 #print("prompt embed aka x", prompt_embed.shape)
                 #print('batch[scenegraph_embeddings] aka sg_embed', batch["scenegraph_embeddings"].shape)
 
-                pipeline = StableDiffusionTextSGPipeline.from_pretrained(
-                    args.pretrained_model_name_or_path,
-                    vae=accelerator.unwrap_model(vae),
-                    text_encoder=accelerator.unwrap_model(text_encoder),
-                    tokenizer=tokenizer,
-                    unet=accelerator.unwrap_model(unet),
-                    safety_checker=None,
-                    revision=args.revision,
-                    torch_dtype=weight_dtype,
-                    num_gnn_layers=args.num_gnn_layers,
-                )
-                pipeline = pipeline.to(prompt_embed.device)
-                pipeline.set_progress_bar_config(disable=True)
-
                 token_mask = torch.ones(prompt_embed.shape[:2], device=prompt_embed.device, dtype=torch.bool)
-                
-                target_dtype = pipeline.text_encoder.dtype
-                prompt_embed = prompt_embed.to(dtype=target_dtype)
-                pipeline.token_to_sg = pipeline.token_to_sg.to(dtype=target_dtype)
-                
+
                 S, node_embeddings, E_logits = pipeline.token_to_sg(prompt_embed, token_mask=token_mask)
 
                 updated_prompt_embed = adapter(
