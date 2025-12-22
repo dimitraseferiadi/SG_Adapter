@@ -754,7 +754,7 @@ def main():
             d_head=128,
             pooling=args.use_pooling
         )
-        
+
     # Create EMA for the unet.
     if args.use_ema:
         ema_unet = UNet2DConditionModel.from_pretrained(
@@ -1153,7 +1153,7 @@ def main():
                 if step % args.gradient_accumulation_steps == 0:
                     progress_bar.update(1)
                 continue
-            with accelerator.accumulate(adapter):
+            with accelerator.accumulate([adapter, pipeline.token_to_sg]):
                 # Convert images to latent space
                 latents = vae.encode(batch["pixel_values"].to(weight_dtype)).latent_dist.sample()
                 latents = latents * vae.config.scaling_factor
