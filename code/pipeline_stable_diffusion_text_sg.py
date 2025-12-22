@@ -85,8 +85,10 @@ class StableDiffusionTextSGPipeline(DiffusionPipeline):
             Please, refer to the [model card](https://huggingface.co/runwayml/stable-diffusion-v1-5) for details.
         feature_extractor ([`CLIPFeatureExtractor`]):
             Model that extracts features from generated images to be used as inputs for the `safety_checker`.
+        token_to_sg ([`TokenToSceneGraph`]):
+            Model that maps tokens to scene graph embeddings.
     """
-    _optional_components = ["safety_checker", "feature_extractor"]
+    _optional_components = ["safety_checker", "feature_extractor", "token_to_sg"]
 
     def __init__(
         self,
@@ -97,6 +99,7 @@ class StableDiffusionTextSGPipeline(DiffusionPipeline):
         scheduler: KarrasDiffusionSchedulers,
         safety_checker: StableDiffusionSafetyChecker,
         feature_extractor: CLIPFeatureExtractor,
+        token_to_sg: Optional[nn.Module] = None,
         requires_safety_checker: bool = True,
         num_gnn_layers: int = 1,
         node_dim: int = 3080,
@@ -167,17 +170,20 @@ class StableDiffusionTextSGPipeline(DiffusionPipeline):
             new_config["sample_size"] = 64
             unet._internal_dict = FrozenDict(new_config)
 
-        clip_dim = text_encoder.config.hidden_size  # typically 768 for CLIP-L/14
-        self.token_to_sg = TokenToSceneGraph(
-            token_dim=clip_dim,
-            K=8,
-            node_dim=node_dim,
-            heads=4,
-            hidden_dim=512,
-            use_bilinear=False,
-            num_gnn_layers=num_gnn_layers
-        )
-        
+        if token_to_sg is None:
+            clip_dim = text_encoder.config.hidden_size  # typically 768 for CLIP-L/14
+            self.token_to_sg = TokenToSceneGraph(
+                token_dim=clip_dim,
+                K=8,
+                node_dim=node_dim,
+                heads=4,
+                hidden_dim=512,
+                use_bilinear=False,
+                num_gnn_layers=num_gnn_layers
+            )
+        else:
+            self.token_to_sg = token_to_sg
+            
         self.register_modules(
             vae=vae,
             text_encoder=text_encoder,
