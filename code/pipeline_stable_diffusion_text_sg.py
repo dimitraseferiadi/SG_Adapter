@@ -167,18 +167,6 @@ class StableDiffusionTextSGPipeline(DiffusionPipeline):
             new_config["sample_size"] = 64
             unet._internal_dict = FrozenDict(new_config)
 
-        self.register_modules(
-            vae=vae,
-            text_encoder=text_encoder,
-            tokenizer=tokenizer,
-            unet=unet,
-            scheduler=scheduler,
-            safety_checker=safety_checker,
-            feature_extractor=feature_extractor,
-        )
-        self.vae_scale_factor = 2 ** (len(self.vae.config.block_out_channels) - 1)
-        self.register_to_config(requires_safety_checker=requires_safety_checker, num_gnn_layers=num_gnn_layers)
-
         clip_dim = text_encoder.config.hidden_size  # typically 768 for CLIP-L/14
         self.token_to_sg = TokenToSceneGraph(
             token_dim=clip_dim,
@@ -189,8 +177,19 @@ class StableDiffusionTextSGPipeline(DiffusionPipeline):
             use_bilinear=False,
             num_gnn_layers=num_gnn_layers
         )
-        self.token_to_sg = self.token_to_sg.to(self.device) 
-
+        
+        self.register_modules(
+            vae=vae,
+            text_encoder=text_encoder,
+            tokenizer=tokenizer,
+            unet=unet,
+            scheduler=scheduler,
+            safety_checker=safety_checker,
+            feature_extractor=feature_extractor,
+            token_to_sg=self.token_to_sg,
+        )
+        self.vae_scale_factor = 2 ** (len(self.vae.config.block_out_channels) - 1)
+        self.register_to_config(requires_safety_checker=requires_safety_checker, num_gnn_layers=num_gnn_layers)
 
     def enable_vae_slicing(self):
         r"""

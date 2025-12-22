@@ -205,7 +205,8 @@ def log_validation(vae, text_encoder, tokenizer, unet, adapter, token_to_sg, arg
 
                 prompt_embeds = pipeline.text_encoder(inputs.input_ids)[0]
 
-                token_mask = torch.ones(prompt_embeds.shape[:2], device=prompt_embeds.device, dtype=torch.long)
+                token_mask = inputs.attention_mask
+                
                 S, V_nodes, _ = pipeline.token_to_sg(prompt_embeds, token_mask=token_mask)
                 
                 attn_mask = inputs.attention_mask
@@ -1172,7 +1173,7 @@ def main():
                 else:
                     # Fallback only if mask is missing
                     token_mask = torch.ones(prompt_embed.shape[:2], device=prompt_embed.device, dtype=torch.long)
-                    
+
                 S, node_embeddings, E_logits = pipeline.token_to_sg(prompt_embed, token_mask=token_mask)
 
                 updated_prompt_embed = adapter(
