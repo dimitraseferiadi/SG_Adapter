@@ -155,7 +155,7 @@ More information on all the CLI arguments and the environment are available on y
     with open(os.path.join(repo_folder, "README.md"), "w") as f:
         f.write(yaml + model_card)
 
-def log_validation(vae, text_encoder, tokenizer, unet, adapter, args, accelerator, weight_dtype, global_step):
+def log_validation(vae, text_encoder, tokenizer, unet, adapter, token_to_sg, args, accelerator, weight_dtype, global_step):
     logger.info("Running validation... ")
     pipeline = StableDiffusionTextSGPipeline.from_pretrained(
         args.pretrained_model_name_or_path,
@@ -168,6 +168,8 @@ def log_validation(vae, text_encoder, tokenizer, unet, adapter, args, accelerato
         torch_dtype=weight_dtype,
         num_gnn_layers=args.num_gnn_layers,
     )
+    pipeline.token_to_sg = accelerator.unwrap_model(token_to_sg)
+
     pipeline = pipeline.to(accelerator.device)
     pipeline.set_progress_bar_config(disable=True)
 
@@ -810,7 +812,19 @@ def main():
                 ema_unet.save_pretrained(os.path.join(output_dir, "unet_ema"))
 
             for i, model in enumerate(models):
-                model.save_pretrained(os.path.join(output_dir, "adapter"))
+                # Check class name to determine folder
+                # Handle unwrapped DistributedDataParallel models if necessary
+                if hasattr(model, "module"):
+                    model_class = model.module.__class__.__name__
+                else:
+                    model_class = model.__class__.__name__
+
+                if "TokenToSceneGraph" in model_class:
+                    sub_dir = "token_to_sg"
+                else:
+                    sub_dir = "adapter"
+                
+                model.save_pretrained(os.path.join(output_dir, sub_dir))
 
                 # make sure to pop weight so that corresponding model is not saved again
                 weights.pop()
@@ -1125,6 +1139,7 @@ def main():
                         tokenizer,
                         unet,
                         adapter,
+                        pipeline.token_to_sg,
                         args,
                         accelerator,
                         weight_dtype,
@@ -1288,7 +1303,15 @@ def main():
         unet = accelerator.unwrap_model(unet)
         if args.use_ema:
             ema_unet.copy_to(unet.parameters())
-
+        
+        # 1. Save the custom trained modules explicitly
+        unwrap_adapter = accelerator.unwrap_model(adapter)
+        unwrap_sg = accelerator.unwrap_model(pipeline.token_to_sg)
+        
+        unwrap_adapter.save_pretrained(os.path.join(args.output_dir, "adapter"))
+        unwrap_sg.save_pretrained(os.path.join(args.output_dir, "token_to_sg"))
+        
+        # 2. Save the standard pipeline parts (optional, but good for completeness)
         pipeline = StableDiffusionPipeline.from_pretrained(
             args.pretrained_model_name_or_path,
             text_encoder=text_encoder,

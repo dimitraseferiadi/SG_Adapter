@@ -673,10 +673,13 @@ class StableDiffusionTextSGPipeline(DiffusionPipeline):
                 n = prompt_embeds.shape[0]
                 prompt_cond = prompt_embeds[n//2:,:,:]
 
-                # run token→graph module
-                token_mask = torch.ones(prompt_cond.shape[:2], device=prompt_cond.device, dtype=torch.long)
-                S, V_nodes, _ = self.token_to_sg(prompt_cond, token_mask=token_mask)
-
+                if node_embeddings is None or token_node_assign is None:
+                    token_mask = torch.ones(prompt_cond.shape[:2], device=prompt_cond.device, dtype=torch.long)
+                    S, V_nodes, _ = self.token_to_sg(prompt_cond, token_mask=token_mask)
+                else:
+                    # Use the passed values
+                    S = token_node_assign
+                    V_nodes = node_embeddings
                 # run adapter (already modified to accept node_embeddings and token_node_assign)
                 prompt_cond = adapter(
                     prompt_cond, node_embeddings=V_nodes, token_node_assign=S, self_attention_mask=self_attention_mask
@@ -684,8 +687,12 @@ class StableDiffusionTextSGPipeline(DiffusionPipeline):
 
                 prompt_embeds[n // 2 :, :, :] = prompt_cond
             else:
-                token_mask = torch.ones(prompt_embeds.shape[:2], device=prompt_embeds.device, dtype=torch.long)
-                S, V_nodes, _ = self.token_to_sg(prompt_embeds, token_mask=token_mask)
+                if node_embeddings is None or token_node_assign is None:
+                    token_mask = torch.ones(prompt_embeds.shape[:2], device=prompt_embeds.device, dtype=torch.long)
+                    S, V_nodes, _ = self.token_to_sg(prompt_embeds, token_mask=token_mask)
+                else:
+                    S = token_node_assign
+                    V_nodes = node_embeddings
                 prompt_embeds = adapter(
                     prompt_embeds, node_embeddings=V_nodes, token_node_assign=S, self_attention_mask=self_attention_mask
                 )
