@@ -197,7 +197,9 @@ def log_validation(vae, text_encoder, tokenizer, unet, adapter, token_to_sg, arg
 
                 inputs = tokenizer(
                     validation_input['caption'],
-                    padding=True,
+                    padding="max_length",
+                    max_length=tokenizer.model_max_length,
+                    truncation=True,
                     return_tensors="pt"
                 ).to(accelerator.device)
 
@@ -205,12 +207,8 @@ def log_validation(vae, text_encoder, tokenizer, unet, adapter, token_to_sg, arg
 
                 token_mask = torch.ones(prompt_embeds.shape[:2], device=prompt_embeds.device, dtype=torch.long)
                 S, V_nodes, _ = pipeline.token_to_sg(prompt_embeds, token_mask=token_mask)
-
-                attn_mask = tokenizer(
-                    validation_input['caption'], 
-                    padding=True, 
-                    return_tensors="pt"
-                ).attention_mask.to(accelerator.device)
+                
+                attn_mask = inputs.attention_mask
 
                 encoder_attention_mask = generate_encoder_attention_mask(attn_mask).repeat(2, 1)
                 encoder_attention_mask = encoder_attention_mask.to(dtype=weight_dtype)
