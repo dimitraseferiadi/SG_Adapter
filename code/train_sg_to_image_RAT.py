@@ -754,10 +754,7 @@ def main():
             d_head=128,
             pooling=args.use_pooling
         )
-
-    # Move to device
-    adapter = adapter.to(accelerator.device)
-    
+        
     # Create EMA for the unet.
     if args.use_ema:
         ema_unet = UNet2DConditionModel.from_pretrained(
