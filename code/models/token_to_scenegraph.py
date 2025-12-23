@@ -7,7 +7,10 @@ from typing import Optional
 from models.triplet_fusion import RelationalTripletFusion 
 from models.relational_gnn import RelationalGNNLayer
 
-class TokenToSceneGraph(nn.Module):
+from diffusers.configuration_utils import ConfigMixin, register_to_config
+from diffusers.models.modeling_utils import ModelMixin
+
+class TokenToSceneGraph(ModelMixin, ConfigMixin):
     """
     Learnable replacement for deterministic parser τ(·).
     Maps CLIP token embeddings w -> (S, V, E_logits)
@@ -20,6 +23,7 @@ class TokenToSceneGraph(nn.Module):
     Usage:
       S, V, E_logits = token_to_sg(w, token_mask=token_mask)
     """
+    @register_to_config
     def __init__(
         self,
         token_dim: int,
